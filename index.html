@@ -18,6 +18,7 @@
             border: 1px solid #ccc;
             background: white;
             overflow-y: auto;
+            text-align: left;
         }
         #message-input {
             width: 60%;
@@ -37,34 +38,57 @@
 
     <h2>Web Chat App</h2>
     <div id="chat-box"></div>
+    <div id="status">Connecting...</div>
 
     <input type="text" id="message-input" placeholder="Type your reply...">
     <button id="send-button">Send</button>
 
     <script>
-        const serverIp = "Your_IP_ADDRESS";  // Replace with actual IP
-        const socket = new WebSocket(`ws://${serverIp}:8000/ws/windows`);
+        const serverIp = "192.168.149.180";
+        const chatBox = document.getElementById("chat-box");
+        const statusText = document.getElementById("status");
+        let socket;
 
-        socket.onopen = () => {
-            console.log("Connected to WebSocket server");
-        };
+        function connectWebSocket() {
+            socket = new WebSocket(`ws://${serverIp}:8000/ws/windows`);
 
-        socket.onmessage = (event) => {
-            const chatBox = document.getElementById("chat-box");
-            const newMessage = document.createElement("p");
-            newMessage.innerHTML = `<strong>Android:</strong> ${event.data}`;
-            chatBox.appendChild(newMessage);
-        };
+            socket.onopen = () => {
+                statusText.textContent = "Connected ✅"; // ✅
+                statusText.style.color = "green";
+            };
+
+            socket.onmessage = (event) => {
+                const newMessage = document.createElement("p");
+                newMessage.innerHTML = `<strong>Android:</strong> ${event.data}`;
+                chatBox.appendChild(newMessage);
+                chatBox.scrollTop = chatBox.scrollHeight; // 📜 Auto-scroll
+            };
+
+            socket.onerror = () => {
+                statusText.textContent = "Connection Error ❌";
+                statusText.style.color = "red";
+            };
+
+            socket.onclose = () => {
+                statusText.textContent = "Disconnected ❌ Reconnecting...";
+                statusText.style.color = "red";
+                setTimeout(connectWebSocket, 3000); // 🔄 Retry connection
+            };
+        }
+
+        connectWebSocket(); // 🔄 Initial connect
 
         document.getElementById("send-button").addEventListener("click", () => {
             const input = document.getElementById("message-input");
-            const message = input.value;
-            if (message) {
+            const message = input.value.trim();
+            if (message && socket.readyState === WebSocket.OPEN) {
                 socket.send(message);
-                const chatBox = document.getElementById("chat-box");
+
                 const newMessage = document.createElement("p");
                 newMessage.innerHTML = `<strong>Me:</strong> ${message}`;
                 chatBox.appendChild(newMessage);
+                chatBox.scrollTop = chatBox.scrollHeight; 
+
                 input.value = "";
             }
         });
