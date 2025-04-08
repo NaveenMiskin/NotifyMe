@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Chat App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f4;
+        }
+        #chat-box {
+            width: 60%;
+            height: 300px;
+            margin: 20px auto;
+            padding: 10px;
+            border: 1px solid #ccc;
+            background: white;
+            overflow-y: auto;
+        }
+        #message-input {
+            width: 60%;
+            padding: 10px;
+            margin-top: 10px;
+        }
+        #send-button {
+            padding: 10px 15px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Web Chat App</h2>
+    <div id="chat-box"></div>
+
+    <input type="text" id="message-input" placeholder="Type your reply...">
+    <button id="send-button">Send</button>
+
+    <script>
+        const serverIp = "Your_IP_ADDRESS";  // Replace with actual IP
+        const socket = new WebSocket(`ws://${serverIp}:8000/ws/windows`);
+
+        socket.onopen = () => {
+            console.log("Connected to WebSocket server");
+        };
+
+        socket.onmessage = (event) => {
+            const chatBox = document.getElementById("chat-box");
+            const newMessage = document.createElement("p");
+            newMessage.innerHTML = `<strong>Android:</strong> ${event.data}`;
+            chatBox.appendChild(newMessage);
+        };
+
+        document.getElementById("send-button").addEventListener("click", () => {
+            const input = document.getElementById("message-input");
+            const message = input.value;
+            if (message) {
+                socket.send(message);
+                const chatBox = document.getElementById("chat-box");
+                const newMessage = document.createElement("p");
+                newMessage.innerHTML = `<strong>Me:</strong> ${message}`;
+                chatBox.appendChild(newMessage);
+                input.value = "";
+            }
+        });
+    </script>
+
+</body>
+</html>
