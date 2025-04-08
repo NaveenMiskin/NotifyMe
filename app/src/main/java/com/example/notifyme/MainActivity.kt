@@ -3,8 +3,10 @@ package com.example.notifyme
 import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.TextView
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -23,7 +25,10 @@ class MainActivity : AppCompatActivity() {
     private val client = OkHttpClient.Builder()
         .pingInterval(10, TimeUnit.SECONDS) // Keep connection alive
         .build()
-    private val serverUrl = "ws://Your_IP_Address:8000/ws/android"
+    private val serverUrl = "ws://your_server_IP:8000/ws/android"
+    private var hasShownError = false
+
+    private lateinit var scrollView: ScrollView
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -34,13 +39,14 @@ class MainActivity : AppCompatActivity() {
         statusText = findViewById(R.id.statusText)
         val messageInput = findViewById<EditText>(R.id.messageInput)
         val sendButton = findViewById<Button>(R.id.sendButton)
+        scrollView = findViewById(R.id.scrollView)
 
         connectWebSocket()
 
         sendButton.setOnClickListener {
             val messageText = messageInput.text.toString()
             if (messageText.isNotEmpty()) {
-                messageDisplay.append("\nMe: $messageText\n")
+                appendMessage("\nMe: $messageText")
                 messageInput.text.clear()
 
                 webSocket.send(messageText)
@@ -87,13 +93,23 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     statusText.text = "Connected ✅"
                     statusText.setTextColor(Color.GREEN)
-                    messageDisplay.append("\n                        Connected to server\n                     waiting for the messages...\n")
+                    appendMessage("\n                        Connected to server\n                     waiting for the messages...\n")
+                    hasShownError = false
+                    // Fade out error message if it exists
+                    val text = messageDisplay.text.toString()
+                    if (text.contains("Error:")) {
+                        messageDisplay.postDelayed({
+                            val lines = messageDisplay.text.split("\n")
+                            val filteredLines = lines.filterNot { it.startsWith("Error:") }
+                            messageDisplay.text = filteredLines.joinToString("\n")
+                        }, 2000)
+                    }
                 }
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
                 runOnUiThread {
-                    messageDisplay.append("\nWindows: $text")
+                    appendMessage("\nWindows: $text")
                 }
             }
 
@@ -101,7 +117,10 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     statusText.text = "Disconnected ❌ Reconnecting..."
                     statusText.setTextColor(Color.RED)
-                    messageDisplay.append("\nError: ${t.message}")
+                    if (!hasShownError) {
+                        messageDisplay.append("\nError: ${t.message}")
+                        hasShownError = true  // Set flag to true so it doesn't repeat
+                    }
                 }
                 reconnectWebSocket() // Try to reconnect
             }
@@ -119,5 +138,11 @@ class MainActivity : AppCompatActivity() {
     private fun reconnectWebSocket() {
         Thread.sleep(3000) // Wait 3 seconds before reconnecting
         connectWebSocket()
+    }
+    private fun appendMessage(message: String) {
+        messageDisplay.append("\n$message")
+        scrollView.post {
+            scrollView.fullScroll(View.FOCUS_DOWN)
+        }
     }
 }
