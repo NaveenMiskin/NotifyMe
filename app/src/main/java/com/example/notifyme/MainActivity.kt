@@ -3,17 +3,24 @@ package com.example.notifyme
 import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONObject
 import java.util.concurrent.TimeUnit
+import okhttp3.Call
+import okhttp3.Callback
+import java.io.IOException
 
 
 class MainActivity : AppCompatActivity() {
@@ -25,8 +32,11 @@ class MainActivity : AppCompatActivity() {
     private val client = OkHttpClient.Builder()
         .pingInterval(10, TimeUnit.SECONDS) // Keep connection alive
         .build()
-    private val serverUrl = "ws://your_server_IP:8000/ws/android"
+   //private val serverUrl = "ws://192.168.149.180:8000/ws/android"
+   private val ipFetchUrl = "http://192.168.149.180:8000/ip"
+
     private var hasShownError = false
+    private var hasMessageAppend = false
 
     private lateinit var scrollView: ScrollView
 
@@ -37,11 +47,33 @@ class MainActivity : AppCompatActivity() {
 
         messageDisplay = findViewById(R.id.messageDisplay)
         statusText = findViewById(R.id.statusText)
+        scrollView = findViewById(R.id.scrollView)
         val messageInput = findViewById<EditText>(R.id.messageInput)
         val sendButton = findViewById<Button>(R.id.sendButton)
-        scrollView = findViewById(R.id.scrollView)
+        val swipeRefreshLayout = findViewById<SwipeRefreshLayout>(R.id.swipeRefreshLayout)
 
-        connectWebSocket()
+
+        //connectWebSocket(serverUrl)
+        swipeRefreshLayout.setOnRefreshListener {
+            // custom toast.... below.........
+
+            val inflater = layoutInflater
+            val layout: View = inflater.inflate(R.layout.custom_toast, null)
+
+            val textView = layout.findViewById<TextView>(R.id.toast_text)
+            textView.text = "Refreshing..."
+
+            val toast = Toast(this)
+            toast.duration = Toast.LENGTH_SHORT
+            toast.view = layout
+            toast.show()
+            toast.setGravity(Gravity.CENTER,0,0)
+
+            //Default Toast................
+            //Toast.makeText(this,"Refreshing...",Toast.LENGTH_SHORT).show()
+            fetchServerIpAndConnect()
+            swipeRefreshLayout.isRefreshing = false
+        }
 
         sendButton.setOnClickListener {
             val messageText = messageInput.text.toString()
@@ -86,14 +118,35 @@ class MainActivity : AppCompatActivity() {
 
     }
 
-    private fun connectWebSocket() {
+    private fun fetchServerIpAndConnect() {
+        val request = Request.Builder().url(ipFetchUrl).build()
+        client.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                runOnUiThread {
+                    statusText.text = "Failed to fetch IP ❌"
+                    statusText.setTextColor(Color.RED)
+                }
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                val body = response.body?.string()
+                val ip = JSONObject(body).getString("ip")
+                val serverUrl = "ws://$ip:8000/ws/android"
+                runOnUiThread { connectWebSocket(serverUrl) }
+            }
+        })
+    }
+    private fun connectWebSocket(serverUrl: String) {
         val request = Request.Builder().url(serverUrl).build()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 runOnUiThread {
                     statusText.text = "Connected ✅"
                     statusText.setTextColor(Color.GREEN)
-                    appendMessage("\n                        Connected to server\n                     waiting for the messages...\n")
+                    if(!hasMessageAppend){
+                        appendMessage("\n                          Connected to server\n                       waiting for the messages...\n")
+                        hasMessageAppend = true
+                    }
                     hasShownError = false
                     // Fade out error message if it exists
                     val text = messageDisplay.text.toString()
@@ -119,10 +172,10 @@ class MainActivity : AppCompatActivity() {
                     statusText.setTextColor(Color.RED)
                     if (!hasShownError) {
                         messageDisplay.append("\nError: ${t.message}")
-                        hasShownError = true  // Set flag to true so it doesn't repeat
+                        hasShownError = true
                     }
                 }
-                reconnectWebSocket() // Try to reconnect
+                reconnectWebSocket()
             }
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
@@ -130,14 +183,14 @@ class MainActivity : AppCompatActivity() {
                     statusText.text = "Disconnected ❌"
                     statusText.setTextColor(Color.RED)
                 }
-                reconnectWebSocket() // Try to reconnect
+                reconnectWebSocket()
             }
         })
     }
 
     private fun reconnectWebSocket() {
-        Thread.sleep(3000) // Wait 3 seconds before reconnecting
-        connectWebSocket()
+        Thread.sleep(3000)
+        fetchServerIpAndConnect()
     }
     private fun appendMessage(message: String) {
         messageDisplay.append("\n$message")
